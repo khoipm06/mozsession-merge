@@ -6,92 +6,220 @@ import (
 	"path/filepath"
 	"testing"
 
+	"mozsession-merge/internal/adapter/firefox"
 	"mozsession-merge/internal/adapter/zen"
+	"mozsession-merge/internal/model"
 )
 
-func TestIntegrationMerge(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "mozsession-integration-*")
-	if err != nil {
-		t.Fatalf("failed creating temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	profileA := filepath.Join(tempDir, "Profile1")
-	profileB := filepath.Join(tempDir, "Profile2")
+func TestMergeZenVsZen(t *testing.T) {
+	tempDir := t.TempDir()
+	profileA := filepath.Join(tempDir, "ZenA")
+	profileB := filepath.Join(tempDir, "ZenB")
 	stateDir := filepath.Join(tempDir, "state")
-	reportFile := filepath.Join(tempDir, "report.json")
+	reportFile := filepath.Join(tempDir, "report_zen_zen.json")
 
-	// Copy testdata profiles to temp dirs
-	if err := copyDir("../testdata/Profile1", profileA); err != nil {
-		t.Fatalf("copy Profile1 failed: %v", err)
-	}
-	if err := copyDir("../testdata/Profile2", profileB); err != nil {
-		t.Fatalf("copy Profile2 failed: %v", err)
+	os.MkdirAll(profileA, 0755)
+	os.MkdirAll(profileB, 0755)
+
+	zenAdapter := zen.NewAdapter()
+
+	modelA := model.NormalizedModel{
+		Tabs: []model.Entity{
+			{ID: "tab-shared", Raw: map[string]any{"entries": []any{map[string]any{"url": "https://shared.com"}}, "zenSyncId": "tab-shared", "lastAccessed": int64(100)}},
+			{ID: "tab-zenA", Raw: map[string]any{"entries": []any{map[string]any{"url": "https://zenA.com"}}, "zenSyncId": "tab-zenA", "lastAccessed": int64(200)}},
+		},
+		Spaces: []model.Entity{
+			{ID: "{space-A}", Raw: map[string]any{"uuid": "{space-A}", "name": "Work"}},
+		},
+		Meta: model.Meta{LastCollected: 1000},
 	}
 
-	// 1. First Run: Perform live merge without baseline
+	modelB := model.NormalizedModel{
+		Tabs: []model.Entity{
+			{ID: "tab-shared", Raw: map[string]any{"entries": []any{map[string]any{"url": "https://shared.com"}}, "zenSyncId": "tab-shared", "lastAccessed": int64(100)}},
+			{ID: "tab-zenB", Raw: map[string]any{"entries": []any{map[string]any{"url": "https://zenB.com"}}, "zenSyncId": "tab-zenB", "lastAccessed": int64(300)}},
+		},
+		Spaces: []model.Entity{
+			{ID: "{space-B}", Raw: map[string]any{"uuid": "{space-B}", "name": "Personal"}},
+		},
+		Meta: model.Meta{LastCollected: 1050},
+	}
+
+	if err := zenAdapter.Save(profileA, modelA); err != nil {
+		t.Fatalf("failed saving ZenA: %v", err)
+	}
+	if err := zenAdapter.Save(profileB, modelB); err != nil {
+		t.Fatalf("failed saving ZenB: %v", err)
+	}
+
 	cmd := exec.Command("go", "run", "../cmd/mergetabs",
 		"--force",
 		"--state-dir", stateDir,
 		"--report-file", reportFile,
 		profileA, profileB,
 	)
-	output, err := cmd.CombinedOutput()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("first run mergetabs failed: %v\nOutput: %s", err, string(output))
+		t.Fatalf("Zen vs Zen merge failed: %v\nOutput: %s", err, string(out))
 	}
 
-	// Verify report file was generated
-	if _, err := os.Stat(reportFile); err != nil {
-		t.Fatalf("report file missing after first run: %v", err)
+	mergedA, err := zenAdapter.Load(profileA)
+	if err != nil {
+		t.Fatalf("Load merged ZenA failed: %v", err)
+	}
+	mergedB, err := zenAdapter.Load(profileB)
+	if err != nil {
+		t.Fatalf("Load merged ZenB failed: %v", err)
 	}
 
-	// Verify both profiles were updated and can be loaded
+	if len(mergedA.Tabs) != 3 || len(mergedB.Tabs) != 3 {
+		t.Fatalf("expected 3 merged tabs, got A: %d, B: %d", len(mergedA.Tabs), len(mergedB.Tabs))
+	}
+	if len(mergedA.Spaces) != 2 || len(mergedB.Spaces) != 2 {
+		t.Fatalf("expected 2 merged spaces, got A: %d, B: %d", len(mergedA.Spaces), len(mergedB.Spaces))
+	}
+}
+
+func TestMergeZenVsFirefox(t *testing.T) {
+	tempDir := t.TempDir()
+	profileZen := filepath.Join(tempDir, "ZenProfile")
+	profileFF := filepath.Join(tempDir, "FFProfile")
+	stateDir := filepath.Join(tempDir, "state")
+	reportFile := filepath.Join(tempDir, "report_zen_ff.json")
+
+	os.MkdirAll(profileZen, 0755)
+	os.MkdirAll(profileFF, 0755)
+
 	zenAdapter := zen.NewAdapter()
-	modelA, err := zenAdapter.Load(profileA)
-	if err != nil {
-		t.Fatalf("failed to load merged profile A: %v", err)
-	}
-	modelB, err := zenAdapter.Load(profileB)
-	if err != nil {
-		t.Fatalf("failed to load merged profile B: %v", err)
+	ffAdapter := firefox.NewAdapter()
+
+	modelZen := model.NormalizedModel{
+		Tabs: []model.Entity{
+			{ID: "tab-zen-1", Raw: map[string]any{"entries": []any{map[string]any{"url": "https://zen-tab.com"}}, "zenSyncId": "tab-zen-1", "lastAccessed": int64(100)}},
+		},
+		Spaces: []model.Entity{
+			{ID: "{space-zen}", Raw: map[string]any{"uuid": "{space-zen}", "name": "Zen Workspace"}},
+		},
+		Meta: model.Meta{LastCollected: 1000},
 	}
 
-	if len(modelA.Tabs) != len(modelB.Tabs) {
-		t.Fatalf("expected merged profile A and B to have identical tab count, got %d vs %d", len(modelA.Tabs), len(modelB.Tabs))
+	modelFF := model.NormalizedModel{
+		Tabs: []model.Entity{
+			{ID: "synth-ff-1", Raw: map[string]any{"entries": []any{map[string]any{"url": "https://ff-tab.com"}}, "lastAccessed": int64(200)}},
+		},
+		Meta: model.Meta{
+			LastCollected: 1000,
+			SourceFormat:  "firefox",
+			WindowLayout: []model.WindowLayout{
+				{WindowID: "win-0", TabIDs: []model.EntityID{"synth-ff-1"}, Selected: "synth-ff-1"},
+			},
+		},
 	}
 
-	// 2. Second Run: Perform merge with established baseline (should report 0 changes)
-	cmd2 := exec.Command("go", "run", "../cmd/mergetabs",
+	if err := zenAdapter.Save(profileZen, modelZen); err != nil {
+		t.Fatalf("failed saving profileZen: %v", err)
+	}
+	if err := ffAdapter.Save(profileFF, modelFF); err != nil {
+		t.Fatalf("failed saving profileFF: %v", err)
+	}
+
+	cmd := exec.Command("go", "run", "../cmd/mergetabs",
 		"--force",
 		"--state-dir", stateDir,
 		"--report-file", reportFile,
-		profileA, profileB,
+		profileZen, profileFF,
 	)
-	output2, err := cmd2.CombinedOutput()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("second run mergetabs failed: %v\nOutput: %s", err, string(output2))
+		t.Fatalf("Zen vs Firefox merge failed: %v\nOutput: %s", err, string(out))
 	}
-	t.Logf("Second run output:\n%s", string(output2))
+
+	mergedZen, err := zenAdapter.Load(profileZen)
+	if err != nil {
+		t.Fatalf("failed loading merged Zen profile: %v", err)
+	}
+	mergedFF, err := ffAdapter.Load(profileFF)
+	if err != nil {
+		t.Fatalf("failed loading merged Firefox profile: %v", err)
+	}
+
+	if len(mergedZen.Tabs) != 2 {
+		t.Fatalf("expected 2 merged tabs in Zen profile, got %d", len(mergedZen.Tabs))
+	}
+	if len(mergedFF.Tabs) != 2 {
+		t.Fatalf("expected 2 merged tabs in Firefox profile, got %d", len(mergedFF.Tabs))
+	}
 }
 
-func copyDir(src, dst string) error {
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(dst, rel)
-		if info.IsDir() {
-			return os.MkdirAll(target, info.Mode())
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(target, data, info.Mode())
-	})
+func TestMergeFirefoxVsFirefox(t *testing.T) {
+	tempDir := t.TempDir()
+	profileFFA := filepath.Join(tempDir, "FFA")
+	profileFFB := filepath.Join(tempDir, "FFB")
+	stateDir := filepath.Join(tempDir, "state")
+	reportFile := filepath.Join(tempDir, "report_ff_ff.json")
+
+	os.MkdirAll(profileFFA, 0755)
+	os.MkdirAll(profileFFB, 0755)
+
+	ffAdapter := firefox.NewAdapter()
+
+	modelFFA := model.NormalizedModel{
+		Tabs: []model.Entity{
+			{ID: "synth-tab-1", Raw: map[string]any{"entries": []any{map[string]any{"url": "https://shared.com"}}, "lastAccessed": int64(100)}},
+			{ID: "synth-tab-A", Raw: map[string]any{"entries": []any{map[string]any{"url": "https://ffA.com"}}, "lastAccessed": int64(200)}},
+		},
+		Meta: model.Meta{
+			LastCollected: 1000,
+			SourceFormat:  "firefox",
+			WindowLayout: []model.WindowLayout{
+				{WindowID: "win-0", TabIDs: []model.EntityID{"synth-tab-1", "synth-tab-A"}, Selected: "synth-tab-1"},
+			},
+		},
+	}
+
+	modelFFB := model.NormalizedModel{
+		Tabs: []model.Entity{
+			{ID: "synth-tab-1", Raw: map[string]any{"entries": []any{map[string]any{"url": "https://shared.com"}}, "lastAccessed": int64(100)}},
+			{ID: "synth-tab-B", Raw: map[string]any{"entries": []any{map[string]any{"url": "https://ffB.com"}}, "lastAccessed": int64(300)}},
+		},
+		Meta: model.Meta{
+			LastCollected: 1050,
+			SourceFormat:  "firefox",
+			WindowLayout: []model.WindowLayout{
+				{WindowID: "win-0", TabIDs: []model.EntityID{"synth-tab-1"}, Selected: "synth-tab-1"},
+				{WindowID: "win-1", TabIDs: []model.EntityID{"synth-tab-B"}, Selected: "synth-tab-B"},
+			},
+		},
+	}
+
+	if err := ffAdapter.Save(profileFFA, modelFFA); err != nil {
+		t.Fatalf("failed saving FFA: %v", err)
+	}
+	if err := ffAdapter.Save(profileFFB, modelFFB); err != nil {
+		t.Fatalf("failed saving FFB: %v", err)
+	}
+
+	cmd := exec.Command("go", "run", "../cmd/mergetabs",
+		"--force",
+		"--state-dir", stateDir,
+		"--report-file", reportFile,
+		profileFFA, profileFFB,
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Firefox vs Firefox merge failed: %v\nOutput: %s", err, string(out))
+	}
+
+	mergedFFA, err := ffAdapter.Load(profileFFA)
+	if err != nil {
+		t.Fatalf("failed loading merged FFA: %v", err)
+	}
+	mergedFFB, err := ffAdapter.Load(profileFFB)
+	if err != nil {
+		t.Fatalf("failed loading merged FFB: %v", err)
+	}
+
+	if len(mergedFFA.Tabs) != 3 || len(mergedFFB.Tabs) != 3 {
+		t.Fatalf("expected 3 merged tabs in both Firefox profiles, got A: %d, B: %d", len(mergedFFA.Tabs), len(mergedFFB.Tabs))
+	}
 }
