@@ -2,10 +2,11 @@ package main
 
 import (
 	"crypto/sha256"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/spf13/cobra"
 
 	"mozsession-merge/internal/adapter"
 	"mozsession-merge/internal/adapter/firefox"
@@ -16,6 +17,36 @@ import (
 	"mozsession-merge/internal/profile"
 	"mozsession-merge/internal/report"
 )
+
+var (
+	dryRun           bool
+	conflictStrategy string
+	reportFile       string
+	stateDir         string
+	force            bool
+)
+
+func main() {
+	var rootCmd = &cobra.Command{
+		Use:   "mergetabs <profileA> <profileB>",
+		Short: "Browser Session 3-Way Merge Tool (Firefox & Zen)",
+		Long:  "Safe, offline, baseline-snapshot-based 3-way merge tool for Firefox and Zen browser session stores.",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runMergeTabs(args[0], args[1])
+		},
+	}
+
+	rootCmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "Perform a trial merge without modifying profile session files")
+	rootCmd.Flags().StringVarP(&conflictStrategy, "conflict-strategy", "c", "newer", "Conflict resolution strategy (newer | keep-both | manual)")
+	rootCmd.Flags().StringVarP(&reportFile, "report-file", "r", "merge-report.json", "Output path for structured JSON change report")
+	rootCmd.Flags().StringVarP(&stateDir, "state-dir", "s", defaultStateDir(), "Directory where baseline snapshots and tool state are stored")
+	rootCmd.Flags().BoolVarP(&force, "force", "f", false, "Bypass active profile lock checks")
+
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
 
 func defaultStateDir() string {
 	home, err := os.UserHomeDir()
@@ -47,58 +78,26 @@ func profileID(dir string) string {
 	return fmt.Sprintf("%x", h[:8])
 }
 
-func main() {
-	var (
-		dryRun           bool
-		conflictStrategy string
-		reportFile       string
-		stateDir         string
-		force            bool
-	)
-
-	flag.BoolVar(&dryRun, "dry-run", false, "Perform a trial merge without modifying profile session files")
-	flag.StringVar(&conflictStrategy, "conflict-strategy", "newer", "Conflict resolution strategy (newer | keep-both | manual)")
-	flag.StringVar(&reportFile, "report-file", "merge-report.json", "Output path for structured JSON change report")
-	flag.StringVar(&stateDir, "state-dir", defaultStateDir(), "Directory where baseline snapshots and tool state are stored")
-	flag.BoolVar(&force, "force", false, "Bypass active profile lock checks")
-
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [options] <profileA> <profileB>\n\nOptions:\n", os.Args[0])
-		flag.PrintDefaults()
-	}
-
-	flag.Parse()
-
-	args := flag.Args()
-	if len(args) < 2 {
-		flag.Usage()
-		os.Exit(1)
-	}
-
-	if err := runMergeTabs(args[0], args[1], dryRun, conflictStrategy, reportFile, stateDir, force); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func runMergeTabs(profileA, profileB string, dryRun bool, conflictStrategy, reportFile, stateDir string, force bool) error {
+func runMergeTabs(profileA, profileB string) error {
 	strat, err := parseStrategy(conflictStrategy)
 	if err != nil {
 		return err
 	}
 
+	// 1. Profile-specific lock checks
 	if !force {
 		lockedA, reasonA, errA := profile.IsLocked(profileA)
 		if errA == nil && lockedA {
-			return fmt.Errorf("profile A (%s) is locked: %s. Close browser or use -force", profileA, reasonA)
+			return fmt.Errorf("profile A (%s) is locked: %s. Close browser or use --force", profileA, reasonA)
 		}
 
 		lockedB, reasonB, errB := profile.IsLocked(profileB)
 		if errB == nil && lockedB {
-			return fmt.Errorf("profile B (%s) is locked: %s. Close browser or use -force", profileB, reasonB)
+			return fmt.Errorf("profile B (%s) is locked: %s. Close browser or use --force", profileB, reasonB)
 		}
 	}
 
+	// 2. Browser detection
 	kindA, err := profile.DetectBrowser(profileA)
 	if err != nil {
 		return fmt.Errorf("detect profile A (%s) failed: %w", profileA, err)
@@ -124,6 +123,7 @@ func runMergeTabs(profileA, profileB string, dryRun bool, conflictStrategy, repo
 		adapterB = ffAdapter
 	}
 
+	// 3. Load profile A session data (with fallback chain)
 	primaryA := adapter.SessionStorePath(profileA)
 	if kindA == "zen" {
 		primaryA = adapter.ZenSessionsPath(profileA)
@@ -134,6 +134,7 @@ func runMergeTabs(profileA, profileB string, dryRun bool, conflictStrategy, repo
 		return fmt.Errorf("failed loading session for profile A (%s): %w", profileA, err)
 	}
 
+	// 4. Load profile B session data (with fallback chain)
 	primaryB := adapter.SessionStorePath(profileB)
 	if kindB == "zen" {
 		primaryB = adapter.ZenSessionsPath(profileB)
@@ -144,6 +145,7 @@ func runMergeTabs(profileA, profileB string, dryRun bool, conflictStrategy, repo
 		return fmt.Errorf("failed loading session for profile B (%s): %w", profileB, err)
 	}
 
+	// Convert raw bytes to NormalizedModel
 	var modelA, modelB model.NormalizedModel
 	if kindA == "zen" {
 		modelA, err = zenAdapter.LoadBytes(rawA)
@@ -163,10 +165,22 @@ func runMergeTabs(profileA, profileB string, dryRun bool, conflictStrategy, repo
 		return fmt.Errorf("convert profile B to model failed: %w", err)
 	}
 
+	// 5. Load baseline snapshot (check A first, fallback to B)
 	idA := profileID(profileA)
-	baseModel, hasBase, err := profile.LoadBaseline(stateDir, idA)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed loading baseline for profile A: %v\n", err)
+	idB := profileID(profileB)
+
+	baseModelA, hasBaseA, _ := profile.LoadBaseline(stateDir, idA)
+	baseModelB, hasBaseB, _ := profile.LoadBaseline(stateDir, idB)
+
+	var baseModel model.NormalizedModel
+	hasBase := false
+
+	if hasBaseA {
+		baseModel = baseModelA
+		hasBase = true
+	} else if hasBaseB {
+		baseModel = baseModelB
+		hasBase = true
 	}
 
 	opts := merge.Options{
@@ -175,11 +189,13 @@ func runMergeTabs(profileA, profileB string, dryRun bool, conflictStrategy, repo
 		FirstRun: !hasBase,
 	}
 
+	// 6. Perform 3-way merge
 	mergedModel, changes, conflicts, err := merge.ThreeWayMerge(baseModel, modelA, modelB, opts)
 	if err != nil {
 		return fmt.Errorf("3-way merge failed: %w", err)
 	}
 
+	// 7. Write report
 	sources := map[string]string{
 		"profileA": usedA,
 		"profileB": usedB,
@@ -197,6 +213,7 @@ func runMergeTabs(profileA, profileB string, dryRun bool, conflictStrategy, repo
 		}
 	}
 
+	// 8. Atomic save to both profiles (unless dry-run)
 	if !dryRun {
 		if err := adapterA.Save(profileA, mergedModel); err != nil {
 			return fmt.Errorf("save merged session to profile A (%s) failed: %w", profileA, err)
@@ -205,12 +222,12 @@ func runMergeTabs(profileA, profileB string, dryRun bool, conflictStrategy, repo
 			return fmt.Errorf("save merged session to profile B (%s) failed: %w", profileB, err)
 		}
 
+		// Save updated baseline snapshot for both profiles
 		if err := profile.SaveBaseline(stateDir, idA, mergedModel); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed updating baseline snapshot for profile A: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Warning: failed updating baseline for profile A: %v\n", err)
 		}
-		idB := profileID(profileB)
 		if err := profile.SaveBaseline(stateDir, idB, mergedModel); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed updating baseline snapshot for profile B: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Warning: failed updating baseline for profile B: %v\n", err)
 		}
 		fmt.Println("Successfully saved merged session store to both profiles and updated baselines.")
 	} else {
