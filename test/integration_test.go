@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"mozsession-merge/internal/adapter/firefox"
-	"mozsession-merge/internal/adapter/zen"
-	"mozsession-merge/internal/model"
+	"github.com/khoipm06/mozsession-merge/internal/adapter/firefox"
+	"github.com/khoipm06/mozsession-merge/internal/adapter/zen"
+	"github.com/khoipm06/mozsession-merge/internal/model"
 )
 
 func TestMergeZenVsZen(t *testing.T) {

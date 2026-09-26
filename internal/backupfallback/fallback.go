@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"mozsession-merge/internal/adapter"
-	"mozsession-merge/internal/mozlz4"
+	"github.com/khoipm06/mozsession-merge/internal/adapter"
+	"github.com/khoipm06/mozsession-merge/internal/mozlz4"
 )
 
 var ErrNoValidSessionFile = errors.New("backupfallback: no valid session or backup file found")

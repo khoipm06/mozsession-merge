@@ -1,7 +1,7 @@
 package merge
 
 import (
-	"mozsession-merge/internal/model"
+	"github.com/khoipm06/mozsession-merge/internal/model"
 )
 
 type Change struct {
@@ -25,7 +25,6 @@ type Strategy int
 const (
 	StrategyNewerWins Strategy = iota
 	StrategyKeepBoth
-	StrategyManual
 )
 
 func (s Strategy) String() string {
@@ -34,8 +33,6 @@ func (s Strategy) String() string {
 		return "newer-wins"
 	case StrategyKeepBoth:
 		return "keep-both"
-	case StrategyManual:
-		return "manual"
 	default:
 		return "unknown"
 	}
@@ -43,7 +40,6 @@ func (s Strategy) String() string {
 
 type Options struct {
 	Strategy Strategy
-	DryRun   bool
 	FirstRun bool // no baseline snapshot exists yet
 }
 
@@ -102,7 +98,7 @@ func ThreeWayMerge(base, local, remote model.NormalizedModel, opts Options) (
 	changes = append(changes, splitChanges...)
 	conflicts = append(conflicts, splitConflicts...)
 
-	// Closed tabs pass-through from local side for v1
+	// Closed tabs: passed through from the local side unchanged. Remote closed-tab history is not merged.
 	merged.ClosedTabs = local.ClosedTabs
 
 	// 6. Post-merge integrity sweep

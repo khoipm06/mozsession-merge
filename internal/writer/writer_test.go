@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"mozsession-merge/internal/writer"
+	"github.com/khoipm06/mozsession-merge/internal/writer"
 )
 
 func TestAtomicWrite(t *testing.T) {

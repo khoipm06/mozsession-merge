@@ -7,7 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"mozsession-merge/internal/model"
+	"github.com/khoipm06/mozsession-merge/internal/model"
+	"github.com/khoipm06/mozsession-merge/internal/writer"
 )
 
 // LoadBaseline reads the tool's saved baseline snapshot for a profile.
@@ -47,19 +48,14 @@ func SaveBaseline(toolStateDir, profileID string, m model.NormalizedModel) error
 	}
 
 	baselinePath := filepath.Join(dir, profileID+".json")
-	tmpPath := baselinePath + ".tmp"
 
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return fmt.Errorf("baseline save: json marshal failed: %w", err)
 	}
 
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
-		return fmt.Errorf("baseline save: failed writing tmp file: %w", err)
-	}
-
-	if err := os.Rename(tmpPath, baselinePath); err != nil {
-		return fmt.Errorf("baseline save: failed renaming tmp file: %w", err)
+	if err := writer.AtomicWrite(baselinePath, data, false); err != nil {
+		return fmt.Errorf("baseline save: %w", err)
 	}
 
 	return nil

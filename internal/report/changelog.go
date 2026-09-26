@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"mozsession-merge/internal/merge"
+	"github.com/khoipm06/mozsession-merge/internal/merge"
 )
 
 type Report struct {

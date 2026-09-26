@@ -1,12 +1,12 @@
-# Maintainer & Agent Contribution Guide
+# Contributor Guide
 
-This guide is designed for software engineers and AI coding agents extending or maintaining `mozsession-merge`.
+This guide is for developers extending or maintaining `mozsession-merge`.
 
 ---
 
 ## 1. Ground Rules & Principles
 
-1. **Zero Unnecessary Dependencies**: Prefer Go standard library (`flag`, `encoding/json`, `os`, `fmt`) whenever possible. `github.com/pierrec/lz4/v4` is the only external dependency.
+1. **Minimal Dependencies**: Prefer the Go standard library wherever practical. Current external dependencies: `github.com/pierrec/lz4/v4` (mozLz4 codec) and `github.com/spf13/cobra` (CLI).
 2. **Never Touch Live Browser Profiles in Tests**: Unit and integration tests must strictly use temporary directories (`t.TempDir()`) or programmatic mock session models.
 3. **Never Guess Schemas or Binary Offsets**: Always verify header structure or JSON payloads empirically before defining raw structs.
 4. **Conventional Commits**: All commits must follow Conventional Commits formatting (e.g., `feat(scope): ...`, `test(scope): ...`, `fix(scope): ...`).

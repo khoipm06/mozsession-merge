@@ -1,0 +1,22 @@
+# Build artifacts
+/mergetabs
+/mergetabs.exe
+
+# Runtime output
+merge-report.json
+*.bak
+*.tmp
+
+# Test coverage
+*.out
+*.test
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db

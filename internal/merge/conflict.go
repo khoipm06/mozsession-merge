@@ -1,7 +1,7 @@
 package merge
 
 import (
-	"mozsession-merge/internal/model"
+	"github.com/khoipm06/mozsession-merge/internal/model"
 )
 
 func getTimestamp(raw map[string]any, fallback int64) int64 {
@@ -60,11 +60,6 @@ func resolveConflict(
 
 	case StrategyKeepBoth:
 		// Local version remains primary under local.ID.
-		resolved = local
-		conflict.Resolved = local.Raw
-
-	case StrategyManual:
-		// Fallback to local version as placeholder pending explicit decision.
 		resolved = local
 		conflict.Resolved = local.Raw
 	}

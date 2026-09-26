@@ -3,7 +3,7 @@ package profile
 import (
 	"errors"
 
-	"mozsession-merge/internal/adapter"
+	"github.com/khoipm06/mozsession-merge/internal/adapter"
 )
 
 var ErrProfileNotFound = errors.New("profile: directory does not exist or contains no session files")

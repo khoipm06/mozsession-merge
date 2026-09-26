@@ -8,15 +8,18 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"mozsession-merge/internal/adapter"
-	"mozsession-merge/internal/adapter/firefox"
-	"mozsession-merge/internal/adapter/zen"
-	"mozsession-merge/internal/backupfallback"
-	"mozsession-merge/internal/merge"
-	"mozsession-merge/internal/model"
-	"mozsession-merge/internal/profile"
-	"mozsession-merge/internal/report"
+	"github.com/khoipm06/mozsession-merge/internal/adapter"
+	"github.com/khoipm06/mozsession-merge/internal/adapter/firefox"
+	"github.com/khoipm06/mozsession-merge/internal/adapter/zen"
+	"github.com/khoipm06/mozsession-merge/internal/backupfallback"
+	"github.com/khoipm06/mozsession-merge/internal/merge"
+	"github.com/khoipm06/mozsession-merge/internal/model"
+	"github.com/khoipm06/mozsession-merge/internal/profile"
+	"github.com/khoipm06/mozsession-merge/internal/report"
 )
+
+// version is set at build time via -ldflags "-X main.version=<tag>".
+var version = "dev"
 
 var (
 	dryRun           bool
@@ -28,17 +31,18 @@ var (
 
 func main() {
 	var rootCmd = &cobra.Command{
-		Use:   "mergetabs <profileA> <profileB>",
-		Short: "Browser Session 3-Way Merge Tool (Firefox & Zen)",
-		Long:  "Safe, offline, baseline-snapshot-based 3-way merge tool for Firefox and Zen browser session stores.",
-		Args:  cobra.ExactArgs(2),
+		Use:     "mergetabs <profileA> <profileB>",
+		Short:   "Browser Session 3-Way Merge Tool (Firefox & Zen)",
+		Long:    "Safe, offline, baseline-snapshot-based 3-way merge tool for Firefox and Zen browser session stores.",
+		Args:    cobra.ExactArgs(2),
+		Version: version,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runMergeTabs(args[0], args[1])
 		},
 	}
 
 	rootCmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "Perform a trial merge without modifying profile session files")
-	rootCmd.Flags().StringVarP(&conflictStrategy, "conflict-strategy", "c", "newer", "Conflict resolution strategy (newer | keep-both | manual)")
+	rootCmd.Flags().StringVarP(&conflictStrategy, "conflict-strategy", "c", "newer", "Conflict resolution strategy (newer | keep-both)")
 	rootCmd.Flags().StringVarP(&reportFile, "report-file", "r", "merge-report.json", "Output path for structured JSON change report")
 	rootCmd.Flags().StringVarP(&stateDir, "state-dir", "s", defaultStateDir(), "Directory where baseline snapshots and tool state are stored")
 	rootCmd.Flags().BoolVarP(&force, "force", "f", false, "Bypass active profile lock checks")
@@ -49,11 +53,11 @@ func main() {
 }
 
 func defaultStateDir() string {
-	home, err := os.UserHomeDir()
+	dir, err := os.UserConfigDir()
 	if err != nil {
 		return ".mozsession-merge"
 	}
-	return filepath.Join(home, ".config", "mozsession-merge")
+	return filepath.Join(dir, "mozsession-merge")
 }
 
 func parseStrategy(s string) (merge.Strategy, error) {
@@ -62,10 +66,8 @@ func parseStrategy(s string) (merge.Strategy, error) {
 		return merge.StrategyNewerWins, nil
 	case "keep-both":
 		return merge.StrategyKeepBoth, nil
-	case "manual":
-		return merge.StrategyManual, nil
 	default:
-		return 0, fmt.Errorf("invalid conflict strategy %q (allowed: newer, keep-both, manual)", s)
+		return 0, fmt.Errorf("invalid conflict strategy %q (allowed: newer, keep-both)", s)
 	}
 }
 
@@ -169,8 +171,14 @@ func runMergeTabs(profileA, profileB string) error {
 	idA := profileID(profileA)
 	idB := profileID(profileB)
 
-	baseModelA, hasBaseA, _ := profile.LoadBaseline(stateDir, idA)
-	baseModelB, hasBaseB, _ := profile.LoadBaseline(stateDir, idB)
+	baseModelA, hasBaseA, errBaseA := profile.LoadBaseline(stateDir, idA)
+	if errBaseA != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed loading baseline for profile A: %v\n", errBaseA)
+	}
+	baseModelB, hasBaseB, errBaseB := profile.LoadBaseline(stateDir, idB)
+	if errBaseB != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed loading baseline for profile B: %v\n", errBaseB)
+	}
 
 	var baseModel model.NormalizedModel
 	hasBase := false
@@ -185,7 +193,6 @@ func runMergeTabs(profileA, profileB string) error {
 
 	opts := merge.Options{
 		Strategy: strat,
-		DryRun:   dryRun,
 		FirstRun: !hasBase,
 	}
 

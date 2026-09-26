@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"mozsession-merge/internal/model"
+	"github.com/khoipm06/mozsession-merge/internal/model"
 )
 
 type Adapter interface {

@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"mozsession-merge/internal/model"
-	"mozsession-merge/internal/profile"
+	"github.com/khoipm06/mozsession-merge/internal/model"
+	"github.com/khoipm06/mozsession-merge/internal/profile"
 )
 
 func TestDetectBrowser(t *testing.T) {

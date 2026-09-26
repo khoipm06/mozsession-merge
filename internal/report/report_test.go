@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"mozsession-merge/internal/merge"
-	"mozsession-merge/internal/report"
+	"github.com/khoipm06/mozsession-merge/internal/merge"
+	"github.com/khoipm06/mozsession-merge/internal/report"
 )
 
 func TestReportWriteHumanAndJSON(t *testing.T) {

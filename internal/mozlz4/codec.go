@@ -25,7 +25,7 @@ var (
 )
 
 // Decode decompresses a mozLz4-compressed byte slice.
-// Grounded directly in reference/dejsonlz4.c:
+// Format matches the dejsonlz4 reference implementation:
 // 1. Checks minimum size (8 bytes magic + 4 bytes uncompressed size = 12 bytes).
 // 2. Validates magic bytes "mozLz40\0".
 // 3. Reads 4-byte little-endian uncompressed size.
@@ -59,7 +59,7 @@ func Decode(data []byte) ([]byte, error) {
 }
 
 // Encode compresses uncompressed data into mozLz4 format.
-// Grounded directly in reference/jsonlz4.c:
+// Format matches the jsonlz4 reference implementation:
 // 1. Writes magic bytes "mozLz40\0" (8 bytes).
 // 2. Writes uncompressed length in 4 bytes little-endian.
 // 3. Compresses uncompressed data into LZ4 block starting at offset 12.

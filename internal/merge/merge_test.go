@@ -3,8 +3,8 @@ package merge_test
 import (
 	"testing"
 
-	"mozsession-merge/internal/merge"
-	"mozsession-merge/internal/model"
+	"github.com/khoipm06/mozsession-merge/internal/merge"
+	"github.com/khoipm06/mozsession-merge/internal/model"
 )
 
 func TestNewTabEitherSide(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"mozsession-merge/internal/adapter/zen"
+	"github.com/khoipm06/mozsession-merge/internal/adapter/zen"
 )
 
 func TestZenAdapterRoundTrip(t *testing.T) {

@@ -3,7 +3,7 @@ package model_test
 import (
 	"testing"
 
-	"mozsession-merge/internal/model"
+	"github.com/khoipm06/mozsession-merge/internal/model"
 )
 
 func TestSynthesizeTabID(t *testing.T) {

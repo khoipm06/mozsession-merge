@@ -2,7 +2,7 @@ package merge
 
 import (
 	"fmt"
-	"mozsession-merge/internal/model"
+	"github.com/khoipm06/mozsession-merge/internal/model"
 )
 
 func sweepDanglingReferences(m *model.NormalizedModel) []Change {

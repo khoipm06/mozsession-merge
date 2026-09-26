@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"mozsession-merge/internal/backupfallback"
-	"mozsession-merge/internal/mozlz4"
+	"github.com/khoipm06/mozsession-merge/internal/backupfallback"
+	"github.com/khoipm06/mozsession-merge/internal/mozlz4"
 )
 
 func TestLoadWithFallback(t *testing.T) {

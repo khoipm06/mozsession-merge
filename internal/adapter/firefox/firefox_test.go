@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"mozsession-merge/internal/adapter/firefox"
+	"github.com/khoipm06/mozsession-merge/internal/adapter/firefox"
 )
 
 func TestFirefoxAdapterRoundTrip(t *testing.T) {

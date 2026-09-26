@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"mozsession-merge/internal/mozlz4"
+	"github.com/khoipm06/mozsession-merge/internal/mozlz4"
 )
 
 func TestRoundTrip(t *testing.T) {
@@ -92,13 +92,5 @@ func TestRealSamples(t *testing.T) {
 		if !bytes.Equal(decoded, reDecoded) {
 			t.Fatalf("re-decoded sample %s does not match original decoded JSON", absPath)
 		}
-
-		// Print first 200 chars to test output for visual confirmation
-		previewLen := 200
-		if len(decoded) < previewLen {
-			previewLen = len(decoded)
-		}
-		t.Logf("Sample %s decoded & round-trip re-encoded successfully (%d bytes). First %d chars:\n%s\n",
-			filepath.Base(samplePath), len(decoded), previewLen, string(decoded[:previewLen]))
 	}
 }

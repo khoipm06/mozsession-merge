@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
-	"mozsession-merge/internal/adapter"
-	"mozsession-merge/internal/model"
-	"mozsession-merge/internal/mozlz4"
+	"github.com/khoipm06/mozsession-merge/internal/adapter"
+	"github.com/khoipm06/mozsession-merge/internal/model"
+	"github.com/khoipm06/mozsession-merge/internal/mozlz4"
+	"github.com/khoipm06/mozsession-merge/internal/writer"
 )
 
 type FirefoxAdapter struct{}
@@ -60,17 +62,10 @@ func (a *FirefoxAdapter) Save(profileDir string, m model.NormalizedModel) error 
 	if err != nil {
 		return err
 	}
-
 	sessionStorePath := adapter.SessionStorePath(profileDir)
-	tmpPath := sessionStorePath + ".tmp"
-	if err := os.WriteFile(tmpPath, encoded, 0644); err != nil {
-		return fmt.Errorf("firefox save: failed writing tmp file: %w", err)
+	if err := writer.AtomicWrite(sessionStorePath, encoded, false); err != nil {
+		return fmt.Errorf("firefox save: %w", err)
 	}
-
-	if err := os.Rename(tmpPath, sessionStorePath); err != nil {
-		return fmt.Errorf("firefox save: failed renaming tmp file: %w", err)
-	}
-
 	return nil
 }
 
@@ -145,16 +140,10 @@ func ToModel(s *FirefoxSessionData) (model.NormalizedModel, error) {
 					layout.Selected = tabID
 				}
 
-				// Deduplication check
-				if existing, exists := tabMap[tabID]; exists {
-					isActive := false
+				// Deduplication: if ID already seen, only replace if this instance is the active tab.
+				if _, exists := tabMap[tabID]; exists {
 					if actVal, ok := rawTab["_zenIsActiveTab"].(bool); ok && actVal {
-						isActive = true
-					}
-					if isActive {
 						tabMap[tabID] = model.Entity{ID: tabID, Raw: rawTab}
-					} else {
-						_ = existing
 					}
 				} else {
 					tabMap[tabID] = model.Entity{ID: tabID, Raw: rawTab}
@@ -179,7 +168,7 @@ func ToModel(s *FirefoxSessionData) (model.NormalizedModel, error) {
 
 	m.Meta.WindowLayout = windowLayouts
 
-	// Convert maps to slices
+	// Convert maps to slices with deterministic ordering by entity ID.
 	for _, e := range tabMap {
 		m.Tabs = append(m.Tabs, e)
 	}
@@ -195,6 +184,11 @@ func ToModel(s *FirefoxSessionData) (model.NormalizedModel, error) {
 	for _, e := range splitMap {
 		m.SplitViewData = append(m.SplitViewData, e)
 	}
+	sort.Slice(m.Tabs, func(i, j int) bool { return m.Tabs[i].ID < m.Tabs[j].ID })
+	sort.Slice(m.Groups, func(i, j int) bool { return m.Groups[i].ID < m.Groups[j].ID })
+	sort.Slice(m.Folders, func(i, j int) bool { return m.Folders[i].ID < m.Folders[j].ID })
+	sort.Slice(m.Spaces, func(i, j int) bool { return m.Spaces[i].ID < m.Spaces[j].ID })
+	sort.Slice(m.SplitViewData, func(i, j int) bool { return m.SplitViewData[i].ID < m.SplitViewData[j].ID })
 
 	return m, nil
 }
@@ -329,32 +323,7 @@ func FromModel(m model.NormalizedModel) *FirefoxSessionData {
 }
 
 func resolveTabID(rawTab map[string]any) model.EntityID {
-	if syncID, ok := rawTab["zenSyncId"].(string); ok && syncID != "" {
-		return model.EntityID(syncID)
-	}
-
-	var entryURLs []string
-	if entries, ok := rawTab["entries"].([]any); ok {
-		for _, eAny := range entries {
-			if eMap, ok := eAny.(map[string]any); ok {
-				if u, ok := eMap["url"].(string); ok {
-					entryURLs = append(entryURLs, u)
-				}
-			}
-		}
-	}
-
-	userContextID := 0
-	if ucVal, ok := rawTab["userContextId"].(float64); ok {
-		userContextID = int(ucVal)
-	}
-
-	pinned := false
-	if pinVal, ok := rawTab["pinned"].(bool); ok {
-		pinned = pinVal
-	}
-
-	return model.SynthesizeTabID(entryURLs, userContextID, pinned)
+	return model.ResolveTabID(rawTab)
 }
 
 func extractEntities(win map[string]any, fieldKey, idKey string, targetMap map[model.EntityID]model.Entity) {
