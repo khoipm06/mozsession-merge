@@ -2,13 +2,13 @@ package test
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/khoipm06/mozsession-merge/internal/adapter/firefox"
 	"github.com/khoipm06/mozsession-merge/internal/adapter/zen"
 	"github.com/khoipm06/mozsession-merge/internal/model"
+	"github.com/khoipm06/mozsession-merge/pkg/mergetabs"
 )
 
 func TestMergeZenVsZen(t *testing.T) {
@@ -52,15 +52,13 @@ func TestMergeZenVsZen(t *testing.T) {
 		t.Fatalf("failed saving ZenB: %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "../cmd/mergetabs",
-		"--force",
-		"--state-dir", stateDir,
-		"--report-file", reportFile,
-		profileA, profileB,
-	)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("Zen vs Zen merge failed: %v\nOutput: %s", err, string(out))
+	if err := mergetabs.Run(profileA, profileB, mergetabs.Options{
+		ConflictStrategy: "newer",
+		ReportFile:       reportFile,
+		StateDir:         stateDir,
+		Force:            true,
+	}); err != nil {
+		t.Fatalf("Zen vs Zen merge failed: %v", err)
 	}
 
 	mergedA, err := zenAdapter.Load(profileA)
@@ -123,15 +121,13 @@ func TestMergeZenVsFirefox(t *testing.T) {
 		t.Fatalf("failed saving profileFF: %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "../cmd/mergetabs",
-		"--force",
-		"--state-dir", stateDir,
-		"--report-file", reportFile,
-		profileZen, profileFF,
-	)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("Zen vs Firefox merge failed: %v\nOutput: %s", err, string(out))
+	if err := mergetabs.Run(profileZen, profileFF, mergetabs.Options{
+		ConflictStrategy: "newer",
+		ReportFile:       reportFile,
+		StateDir:         stateDir,
+		Force:            true,
+	}); err != nil {
+		t.Fatalf("Zen vs Firefox merge failed: %v", err)
 	}
 
 	mergedZen, err := zenAdapter.Load(profileZen)
@@ -199,15 +195,13 @@ func TestMergeFirefoxVsFirefox(t *testing.T) {
 		t.Fatalf("failed saving FFB: %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "../cmd/mergetabs",
-		"--force",
-		"--state-dir", stateDir,
-		"--report-file", reportFile,
-		profileFFA, profileFFB,
-	)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("Firefox vs Firefox merge failed: %v\nOutput: %s", err, string(out))
+	if err := mergetabs.Run(profileFFA, profileFFB, mergetabs.Options{
+		ConflictStrategy: "newer",
+		ReportFile:       reportFile,
+		StateDir:         stateDir,
+		Force:            true,
+	}); err != nil {
+		t.Fatalf("Firefox vs Firefox merge failed: %v", err)
 	}
 
 	mergedFFA, err := ffAdapter.Load(profileFFA)
