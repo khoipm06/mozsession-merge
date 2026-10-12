@@ -43,13 +43,27 @@ go build -o mergetabs ./cmd/mergetabs
 
 ### Dry Run
 ```bash
-mergetabs --dry-run ~/.zen/profile1 ~/.zen/profile2
+mergetabs --dry-run ~/.zen/<profile-dir> ~/.zen/<profile-dir>
 ```
 
 ### Live Merge
 ```bash
-mergetabs ~/.zen/profile1 ~/.zen/profile2
+mergetabs ~/.zen/<profile-dir> ~/.zen/<profile-dir>
 ```
+
+### Finding Browser Profile Paths
+
+| Browser | OS | Default Profile Location |
+|---|---|---|
+| **Zen Browser** | Linux | `~/.zen/<profile_dir>/`<br>*(Flatpak: `~/.var/app/io.github.zen_browser.zen/.zen/<profile_dir>/`)* |
+| | macOS | `~/Library/Application Support/zen/Profiles/<profile_dir>/` |
+| | Windows | `%APPDATA%\zen\Profiles\<profile_dir>\` |
+| **Firefox** | Linux | `~/.mozilla/firefox/<profile_dir>/`<br>*(Flatpak: `~/.var/app/org.mozilla.firefox/.mozilla/firefox/<profile_dir>/`)* |
+| | macOS | `~/Library/Application Support/Firefox/Profiles/<profile_dir>/` |
+| | Windows | `%APPDATA%\Mozilla\Firefox\Profiles\<profile_dir>\` |
+
+> [!TIP]
+> You can find your exact active profile folder by navigating to `about:profiles` in Firefox or Zen and looking at the **Root Directory** field.
 
 ---
 
